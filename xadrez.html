@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xadrez</title>
+    <style>
+        /* Estilos CSS para o jogo de xadrez */
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f0f0f0;
+            margin: 20px;
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        #tabuleiro-container {
+            border: 5px solid #333;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+        }
+
+        #tabuleiro {
+            display: grid;
+            grid-template-columns: repeat(8, 60px); /* 8 colunas de 60px */
+            grid-template-rows: repeat(8, 60px);    /* 8 linhas de 60px */
+            width: 480px; /* 8 * 60px */
+            height: 480px; /* 8 * 60px */
+            background-color: #eee;
+        }
+
+        .casa {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            cursor: pointer;
+            user-select: none; /* Impede seleção de texto */
+        }
+
+        /* Cores das casas do tabuleiro */
+        .casa.clara {
+            background-color: #f0d9b5;
+        }
+
+        .casa.escura {
+            background-color: #b58863;
+        }
+
+        /* Destaque para a peça selecionada */
+        .casa.selecionada {
+            background-color: #aaccff;
+            border: 2px solid #0056b3;
+            box-sizing: border-box; /* Inclui a borda na dimensão */
+        }
+
+        /* Destaque para movimentos válidos */
+        .casa.movimento-valido {
+            background-color: #90ee90; /* Verde claro */
+            border: 2px solid #006400; /* Verde escuro */
+            box-sizing: border-box;
+        }
+
+        .casa.movimento-valido:hover {
+            background-color: #76c776;
+        }
+
+        /* Estilo para peças */
+        .peca {
+            cursor: grab;
+            user-select: none;
+        }
+
+        .peca.branca {
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.7);
+        }
+
+        .peca.preta {
+            color: #333;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.7);
+        }
+
+        #status-jogo {
+            margin-top: 20px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #555;
+            min-height: 25px; /* Para evitar saltos no layout */
+        }
+
+        #mensagens {
+            margin-top: 10px;
+            font-size: 18px;
+            color: #d32f2f; /* Vermelho para alertas */
+            font-weight: bold;
+            min-height: 25px;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Xadrez</h1>
+    <div id="tabuleiro-container">
+        <div id="tabuleiro"></div>
+    </div>
+    <div id="status-jogo"></div>
+    <div id="mensagens"></div>
+    <button onclick="reiniciarJogo()">Reiniciar Jogo</button>
+
+    <script>
+        // Lógica JavaScript para o jogo de xadrez
+
+        // Definição das peças de xadrez em Unicode
+        const PECAS = {
+            'P': '♙', 'R': '♖', 'N': '♘', 'B': '♗', 'Q': '♕', 'K': '♔', // Brancas
+            'p': '♟︎', 'r': '♜', 'n': '♞', 'b': '♝', 'q': '♛', 'k': '♚'  // Pretas
+        };
+
+        // Estado inicial do tabuleiro (representação FEN simplificada)
+        // Linhas de 0 a 7, colunas de 0 a 7
+        // Letras maiúsculas para peças brancas, minúsculas para pretas
+        let tabuleiro = [
+            ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+        ];
+
+        let casaSelecionada = null; // Armazena a casa da peça que foi clicada
+        let jogadorAtual = 'branco'; // Começa com o jogador branco
+        let emXeque = {
+            'branco': false,
+            'preto': false
+        };
+        let gameOver = false;
+
+        // Elementos do DOM
+        const tabuleiroDiv = document.getElementById('tabuleiro');
+        const statusJogoDiv = document.getElementById('status-jogo');
+        const mensagensDiv = document.getElementById('mensagens');
+
+        // Função para iniciar ou reiniciar o jogo
+        function iniciarJogo() {
+            // Reinicia o tabuleiro para o estado inicial
+            tabuleiro = [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['', '', '', '', '', '', '', ''],
+                ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+            ];
+            casaSelecionada = null;
+            jogadorAtual = 'branco';
+            emXeque = {
+                'branco': false,
+                'preto': false
+            };
+            gameOver = false;
+            mensagensDiv.textContent = ''; // Limpa mensagens
+            renderizarTabuleiro();
+            atualizarStatus();
+        }
+
+        // Função para renderizar o tabuleiro no HTML
+        function renderizarTabuleiro() {
+            tabuleiroDiv.innerHTML = ''; // Limpa o tabuleiro existente
+            for (let i = 0; i < 8; i++) { // Linhas (0 a 7)
+                for (let j = 0; j < 8; j++) { // Colunas (0 a 7)
+                    const casa = document.createElement('div');
+                    casa.classList.add('casa');
+                    // Alterna as cores das casas
+                    if ((i + j) % 2 === 0) {
+                        casa.classList.add('clara');
+                    } else {
+                        casa.classList.add('escura');
+                    }
+                    casa.dataset.linha = i; // Armazena a linha como atributo de dado
+                    casa.dataset.coluna = j; // Armazena a coluna como atributo de dado
+
+                    const peca = tabuleiro[i][j];
+                    if (peca) {
+                        const spanPeca = document.createElement('span');
+                        spanPeca.classList.add('peca');
+                        spanPeca.textContent = PECAS[peca];
+                        // Adiciona classe para cor da peça
+                        if (peca === peca.toUpperCase()) {
+                            spanPeca.classList.add('branca');
+                        } else {
+                            spanPeca.classList.add('preta');
+                        }
+                        casa.appendChild(spanPeca);
+                    }
+
+                    casa.addEventListener('click', () => cliqueNaCasa(i, j));
+                    tabuleiroDiv.appendChild(casa);
+                }
+            }
+        }
+
+        // Função para atualizar o status do jogo (vez do jogador, xeque)
+        function atualizarStatus() {
+            if (gameOver) {
+                statusJogoDiv.textContent = `Fim de Jogo! ${jogadorAtual === 'branco' ? 'Preto' : 'Branco'} venceu por Xeque-mate!`;
+            } else {
+                let status = `Vez do ${jogadorAtual === 'branco' ? 'Branco' : 'Preto'}.`;
+                if (emXeque[jogadorAtual]) {
+                    status += ' Você está em Xeque!';
+                }
+                statusJogoDiv.textContent = status;
+            }
+        }
+
+        // Função chamada quando uma casa é clicada
+        function cliqueNaCasa(linha, coluna) {
+            if (gameOver) return; // Não permite movimentos se o jogo acabou
+
+            const pecaNaCasa = tabuleiro[linha][coluna];
+
+            // Se nenhuma peça foi selecionada ainda
+            if (casaSelecionada === null) {
+                // Tenta selecionar uma peça se for do jogador atual
+                if (pecaNaCasa && (
+                    (jogadorAtual === 'branco' && pecaNaCasa === pecaNaCasa.toUpperCase()) ||
+                    (jogadorAtual === 'preto' && pecaNaCasa === pecaNaCasa.toLowerCase())
+                )) {
+                    selecionarPeca(linha, coluna);
+                } else if (pecaNaCasa) {
+                    mensagensDiv.textContent = `É a vez do jogador ${jogadorAtual === 'branco' ? 'Branco' : 'Preto'}. Selecione uma peça da sua cor.`;
+                } else {
+                    mensagensDiv.textContent = 'Selecione uma peça para mover.';
+                }
+            } else {
+                // Uma peça já foi selecionada, tenta mover para a casa clicada
+                const {
+                    linha: selLinha,
+                    coluna: selColuna
+                } = casaSelecionada;
+
+                // Se clicou na mesma peça selecionada, deseleciona
+                if (selLinha === linha && selColuna === coluna) {
+                    desselecionarPeca();
+                } else {
+                    // Tenta mover a peça
+                    const moveValido = validarMovimento(selLinha, selColuna, linha, coluna);
+
+                    if (moveValido) {
+                        realizarMovimento(selLinha, selColuna, linha, coluna);
+                        desselecionarPeca();
+                        alternarJogador();
+                    } else {
+                        mensagensDiv.textContent = 'Movimento inválido! Tente novamente.';
+                        desselecionarPeca(); // Desseleciona para nova tentativa
+                    }
+                }
+            }
+        }
+
+        // Função para selecionar uma peça
+        function selecionarPeca(linha, coluna) {
+            casaSelecionada = {
+                linha,
+                coluna
+            };
+            // Adiciona a classe 'selecionada' à casa clicada
+            document.querySelector(`[data-linha="${linha}"][data-coluna="${coluna}"]`).classList.add('selecionada');
+            mensagensDiv.textContent = ''; // Limpa mensagens anteriores
+
+            // Mostra os movimentos válidos para a peça selecionada
+            mostrarMovimentosValidos(linha, coluna);
+        }
+
+        // Função para desselecionar a peça
+        function desselecionarPeca() {
+            if (casaSelecionada) {
+                // Remove a classe 'selecionada' da casa
+                document.querySelector(`[data-linha="${casaSelecionada.linha}"][data-coluna="${casaSelecionada.coluna}"]`).classList.remove('selecionada');
+                casaSelecionada = null;
+                limparMarcadoresDeMovimento();
+            }
+        }
+
+        // Função para mostrar os movimentos válidos na interface
+        function mostrarMovimentosValidos(linhaOrigem, colunaOrigem) {
+            limparMarcadoresDeMovimento(); // Limpa marcadores anteriores
+
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (validarMovimento(linhaOrigem, colunaOrigem, i, j, true)) {
+                        document.querySelector(`[data-linha="${i}"][data-coluna="${j}"]`).classList.add('movimento-valido');
+                    }
+                }
+            }
+        }
+
+        // Função para limpar os marcadores de movimentos válidos
+        function limparMarcadoresDeMovimento() {
+            document.querySelectorAll('.movimento-valido').forEach(casa => {
+                casa.classList.remove('movimento-valido');
+            });
+        }
+
+        // Função principal para validar um movimento
+        // O parâmetro `simular` é usado para checar se o movimento é válido sem realmente executá-lo,
+        // especialmente útil para verificar se o próprio rei está em xeque após o movimento.
+        function validarMovimento(origemLinha, origemColuna, destinoLinha, destinoColuna, simular = false) {
+            const peca = tabuleiro[origemLinha][origemColuna];
+            if (!peca) return false; // Não há peça na origem
+
+            const corPeca = peca === peca.toUpperCase() ? 'branco' : 'preto';
+            const corAdversario = corPeca === 'branco' ? 'preto' : 'branco';
+
+            // Não pode mover para a mesma casa
+            if (origemLinha === destinoLinha && origemColuna === destinoColuna) {
+                return false;
+            }
+
+            // Não pode capturar peça da mesma cor
+            const pecaDestino = tabuleiro[destinoLinha][destinoColuna];
+            if (pecaDestino) {
+                const corPecaDestino = pecaDestino === pecaDestino.toUpperCase() ? 'branco' : 'preto';
+                if (corPecaDestino === corPeca) {
+                    return false;
+                }
+            }
+
+            let valido = false;
+            switch (peca.toLowerCase()) {
+                case 'p':
+                    valido = validarPeao(origemLinha, origemColuna, destinoLinha, destinoColuna, peca);
+                    break;
+                case 'r':
+                    valido = validarTorre(origemLinha, origemColuna, destinoLinha, destinoColuna);
+                    break;
+                case 'n':
+                    valido = validarCavalo(origemLinha, origemColuna, destinoLinha, destinoColuna);
+                    break;
+                case 'b':
+                    valido = validarBispo(origemLinha, origemColuna, destinoLinha, destinoColuna);
+                    break;
+                case 'q':
+                    valido = validarRainha(origemLinha, origemColuna, destinoLinha, destinoColuna);
+                    break;
+                case 'k':
+                    valido = validarRei(origemLinha, origemColuna, destinoLinha, destinoColuna);
+                    break;
+            }
+
+            if (!valido) return false;
+
+            // Simular o movimento para verificar se o rei ficaria em xeque
+            if (!simular) {
+                const tabuleiroTemp = JSON.parse(JSON.stringify(tabuleiro)); // Copia o tabuleiro
+                tabuleiroTemp[destinoLinha][destinoColuna] = tabuleiroTemp[origemLinha][origemColuna];
+                tabuleiroTemp[origemLinha][origemColuna] = '';
+
+                if (estaEmXeque(corPeca, tabuleiroTemp)) {
+                    mensagensDiv.textContent = 'Movimento inválido! Seu rei estaria em xeque.';
+                    return false; // Não permite o movimento se o rei ficar em xeque
+                }
+            }
+            return valido;
+        }
+
+        // --- Funções de validação de movimento para cada peça ---
+
+        function validarPeao(origemLinha, origemColuna, destinoLinha, destinoColuna, peca) {
+            const direcao = (peca === 'P') ? -1 : 1; // Brancas sobem (-1), Pretas descem (1)
+            const linhaInicialBranca = 6;
+            const linhaInicialPreta = 1;
+
+            // Movimento para frente
+            if (origemColuna === destinoColuna) {
+                // 1 casa para frente
+                if (destinoLinha === origemLinha + direcao && !tabuleiro[destinoLinha][destinoColuna]) {
+                    return true;
+                }
+                // 2 casas para frente (apenas no primeiro movimento)
+                if ((peca === 'P' && origemLinha === linhaInicialBranca && destinoLinha === origemLinha + 2 * direcao && !tabuleiro[destinoLinha][destinoColuna] && !tabuleiro[origemLinha + direcao][origemColuna]) ||
+                    (peca === 'p' && origemLinha === linhaInicialPreta && destinoLinha === origemLinha + 2 * direcao && !tabuleiro[destinoLinha][destinoColuna] && !tabuleiro[origemLinha + direcao][origemColuna])) {
+                    return true;
+                }
+            }
+            // Captura
+            if (Math.abs(origemColuna - destinoColuna) === 1 && destinoLinha === origemLinha + direcao) {
+                const pecaDestino = tabuleiro[destinoLinha][destinoColuna];
+                if (pecaDestino) {
+                    const corPeca = peca === peca.toUpperCase() ? 'branco' : 'preto';
+                    const corPecaDestino = pecaDestino === pecaDestino.toUpperCase() ? 'branco' : 'preto';
+                    if (corPecaDestino !== corPeca) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        function validarTorre(origemLinha, origemColuna, destinoLinha, destinoColuna) {
+            // Movimento horizontal ou vertical
+            if (origemLinha === destinoLinha) { // Horizontal
+                const minCol = Math.min(origemColuna, destinoColuna);
+                const maxCol = Math.max(origemColuna, destinoColuna);
+                for (let c = minCol + 1; c < maxCol; c++) {
+                    if (tabuleiro[origemLinha][c]) return false; // Há peças no caminho
+                }
+                return true;
+            } else if (origemColuna === destinoColuna) { // Vertical
+                const minLin = Math.min(origemLinha, destinoLinha);
+                const maxLin = Math.max(origemLinha, destinoLinha);
+                for (let l = minLin + 1; l < maxLin; l++) {
+                    if (tabuleiro[l][origemColuna]) return false; // Há peças no caminho
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function validarCavalo(origemLinha, origemColuna, destinoLinha, destinoColuna) {
+            const deltaLinha = Math.abs(origemLinha - destinoLinha);
+            const deltaColuna = Math.abs(origemColuna - destinoColuna);
+
+            // Movimento em "L"
+            return (deltaLinha === 2 && deltaColuna === 1) || (deltaLinha === 1 && deltaColuna === 2);
+        }
+
+        function validarBispo(origemLinha, origemColuna, destinoLinha, destinoColuna) {
+            // Movimento diagonal
+            if (Math.abs(origemLinha - destinoLinha) === Math.abs(origemColuna - destinoColuna)) {
+                const deltaLinha = (destinoLinha > origemLinha) ? 1 : -1;
+                const deltaColuna = (destinoColuna > origemColuna) ? 1 : -1;
+
+                let l = origemLinha + deltaLinha;
+                let c = origemColuna + deltaColuna;
+
+                while (l !== destinoLinha && c !== destinoColuna) {
+                    if (tabuleiro[l][c]) return false; // Há peças no caminho
+                    l += deltaLinha;
+                    c += deltaColuna;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function validarRainha(origemLinha, origemColuna, destinoLinha, destinoColuna) {
+            // A rainha pode se mover como torre ou bispo
+            return validarTorre(origemLinha, origemColuna, destinoLinha, destinoColuna) ||
+                validarBispo(origemLinha, origemColuna, destinoLinha, destinoColuna);
+        }
+
+        function validarRei(origemLinha, origemColuna, destinoLinha, destinoColuna) {
+            const deltaLinha = Math.abs(origemLinha - destinoLinha);
+            const deltaColuna = Math.abs(origemColuna - destinoColuna);
+
+            // Rei move-se apenas uma casa em qualquer direção
+            return deltaLinha <= 1 && deltaColuna <= 1;
+        }
+
+        // --- Funções de Lógica do Jogo ---
+
+        // Função para realizar o movimento (atualiza o tabuleiro)
+        function realizarMovimento(origemLinha, origemColuna, destinoLinha, destinoColuna) {
+            const pecaMovida = tabuleiro[origemLinha][origemColuna];
+            tabuleiro[destinoLinha][destinoColuna] = pecaMovida;
+            tabuleiro[origemLinha][origemColuna] = ''; // Limpa a casa de origem
+
+            // Renderiza o tabuleiro novamente após o movimento
+            renderizarTabuleiro();
+        }
+
+        // Função para alternar o jogador
+        function alternarJogador() {
+            jogadorAtual = (jogadorAtual === 'branco') ? 'preto' : 'branco';
+            mensagensDiv.textContent = ''; // Limpa mensagens de erro
+            atualizarStatus();
+
+            // Verifica se o rei do próximo jogador está em xeque
+            emXeque.branco = estaEmXeque('branco', tabuleiro);
+            emXeque.preto = estaEmXeque('preto', tabuleiro);
+
+            if (emXeque[jogadorAtual]) {
+                mensagensDiv.textContent = `Xeque no ${jogadorAtual === 'branco' ? 'Branco' : 'Preto'}!`;
+                // Checa por xeque-mate
+                if (estaEmXequeMate(jogadorAtual)) {
+                    gameOver = true;
+                    atualizarStatus();
+                    mensagensDiv.textContent = `Xeque-mate! ${jogadorAtual === 'branco' ? 'Preto' : 'Branco'} venceu!`;
+                }
+            }
+
+            if (!gameOver && jogadorAtual === 'preto') {
+                // Se for a vez da IA (preto), ela faz um movimento
+                setTimeout(movimentoIA, 1000); // Dá um pequeno atraso para a visualização
+            }
+        }
+
+        // Função para encontrar a posição do rei de uma cor específica
+        function encontrarRei(cor, board) {
+            const reiPeca = cor === 'branco' ? 'K' : 'k';
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    if (board[i][j] === reiPeca) {
+                        return {
+                            linha: i,
+                            coluna: j
+                        };
+                    }
+                }
+            }
+            return null; // Não deveria acontecer em um jogo válido
+        }
+
+        // Função para verificar se um rei está em xeque
+        function estaEmXeque(corRei, board) {
+            const reiPos = encontrarRei(corRei, board);
+            if (!reiPos) return false; // Rei não encontrado (erro)
+
+            const corAdversario = corRei === 'branco' ? 'preto' : 'branco';
+
+            // Percorre todo o tabuleiro para ver se alguma peça adversária pode atacar o rei
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const peca = board[i][j];
+                    if (peca) {
+                        const corPeca = peca === peca.toUpperCase() ? 'branco' : 'preto';
+                        if (corPeca === corAdversario) {
+                            // Validar se a peça adversária pode mover-se para a posição do rei
+                            // Usamos uma cópia do tabuleiro para esta validação
+                            if (validarMovimentoGenerico(i, j, reiPos.linha, reiPos.coluna, board)) {
+                                return true; // Rei está em xeque
+                            }
+                        }
+                    }
+                }
+            }
+            return false; // Rei não está em xeque
+        }
+
+        // Função auxiliar para validar movimentos de qualquer peça em um tabuleiro dado (sem checar xeque no rei)
+        function validarMovimentoGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board) {
+            const peca = board[origemLinha][origemColuna];
+            if (!peca) return false;
+
+            // Não pode mover para a mesma casa
+            if (origemLinha === destinoLinha && origemColuna === destinoColuna) {
+                return false;
+            }
+
+            // Não pode capturar peça da mesma cor
+            const pecaDestino = board[destinoLinha][destinoColuna];
+            if (pecaDestino) {
+                const corPeca = peca === peca.toUpperCase() ? 'branco' : 'preto';
+                const corPecaDestino = pecaDestino === pecaDestino.toUpperCase() ? 'branco' : 'preto';
+                if (corPecaDestino === corPeca) {
+                    return false;
+                }
+            }
+
+            switch (peca.toLowerCase()) {
+                case 'p': {
+                    const direcao = (peca === 'P') ? -1 : 1;
+                    // Captura de peão
+                    if (Math.abs(origemColuna - destinoColuna) === 1 && destinoLinha === origemLinha + direcao) {
+                        return !!board[destinoLinha][destinoColuna]; // Só é válido se houver peça para capturar
+                    }
+                    // Movimento para frente do peão (não importa se está bloqueado para a checagem de xeque)
+                    return destinoLinha === origemLinha + direcao && origemColuna === destinoColuna;
+                }
+                case 'r':
+                    return validarTorreGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board);
+                case 'n':
+                    return validarCavalo(origemLinha, origemColuna, destinoLinha, destinoColuna); // Cavalo não tem bloqueio
+                case 'b':
+                    return validarBispoGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board);
+                case 'q':
+                    return validarTorreGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board) ||
+                        validarBispoGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board);
+                case 'k':
+                    return validarRei(origemLinha, origemColuna, destinoLinha, destinoColuna);
+            }
+            return false;
+        }
+
+        // Funções genéricas para validação de caminho para Torre e Bispo
+        function validarTorreGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board) {
+            if (origemLinha === destinoLinha) {
+                const minCol = Math.min(origemColuna, destinoColuna);
+                const maxCol = Math.max(origemColuna, destinoColuna);
+                for (let c = minCol + 1; c < maxCol; c++) {
+                    if (board[origemLinha][c]) return false;
+                }
+                return true;
+            } else if (origemColuna === destinoColuna) {
+                const minLin = Math.min(origemLinha, destinoLinha);
+                const maxLin = Math.max(origemLinha, destinoLinha);
+                for (let l = minLin + 1; l < maxLin; l++) {
+                    if (board[l][origemColuna]) return false;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        function validarBispoGenerico(origemLinha, origemColuna, destinoLinha, destinoColuna, board) {
+            if (Math.abs(origemLinha - destinoLinha) === Math.abs(origemColuna - destinoColuna)) {
+                const deltaLinha = (destinoLinha > origemLinha) ? 1 : -1;
+                const deltaColuna = (destinoColuna > origemColuna) ? 1 : -1;
+
+                let l = origemLinha + deltaLinha;
+                let c = origemColuna + deltaColuna;
+
+                while (l !== destinoLinha && c !== destinoColuna) {
+                    if (board[l][c]) return false;
+                    l += deltaLinha;
+                    c += deltaColuna;
+                }
+                return true;
+            }
+            return false;
+        }
+
+
+        // Função para verificar se há xeque-mate
+        function estaEmXequeMate(corRei) {
+            // Se não está em xeque, não pode ser xeque-mate
+            if (!emXeque[corRei]) {
+                return false;
+            }
+
+            // Para cada peça do jogador, tenta fazer todos os movimentos possíveis
+            // e verifica se algum movimento tira o rei do xeque
+            for (let origemLinha = 0; origemLinha < 8; origemLinha++) {
+                for (let origemColuna = 0; origemColuna < 8; origemColuna++) {
+                    const peca = tabuleiro[origemLinha][origemColuna];
+                    if (peca) {
+                        const corPeca = peca === peca.toUpperCase() ? 'branco' : 'preto';
+                        if (corPeca === corRei) { // É uma peça do jogador em xeque
+                            for (let destinoLinha = 0; destinoLinha < 8; destinoLinha++) {
+                                for (let destinoColuna = 0; destinoColuna < 8; destinoColuna++) {
+                                    // Simula o movimento
+                                    const tabuleiroTemp = JSON.parse(JSON.stringify(tabuleiro));
+                                    tabuleiroTemp[destinoLinha][destinoColuna] = tabuleiroTemp[origemLinha][origemColuna];
+                                    tabuleiroTemp[origemLinha][origemColuna] = '';
+
+                                    // Verifica se o movimento é válido e se tira o rei do xeque
+                                    if (validarMovimento(origemLinha, origemColuna, destinoLinha, destinoColuna, true) && !estaEmXeque(corRei, tabuleiroTemp)) {
+                                        return false; // Encontrou um movimento que tira do xeque, então não é xeque-mate
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return true; // Não encontrou nenhum movimento que tire do xeque, é xeque-mate
+        }
+
+
+        // --- Lógica da Inteligência Artificial (IA) ---
+        // IA simples que prioriza capturas e movimentos válidos.
+
+        function movimentoIA() {
+            mensagensDiv.textContent = "Vez do adversário (IA)...";
+            const corIA = 'preto';
+            const movimentosPossiveis = [];
+
+            // 1. Coleta todos os movimentos válidos para a IA
+            for (let origemLinha = 0; origemLinha < 8; origemLinha++) {
+                for (let origemColuna = 0; origemColuna < 8; origemColuna++) {
+                    const peca = tabuleiro[origemLinha][origemColuna];
+                    if (peca && peca === peca.toLowerCase()) { // É uma peça preta (IA)
+                        for (let destinoLinha = 0; destinoLinha < 8; destinoLinha++) {
+                            for (let destinoColuna = 0; destinoColuna < 8; destinoColuna++) {
+                                const pecaDestino = tabuleiro[destinoLinha][destinoColuna];
+                                const corPecaDestino = pecaDestino ? (pecaDestino === pecaDestino.toUpperCase() ? 'branco' : 'preto') : '';
+
+                                // Verifica se o movimento é válido para a peça atual E se não coloca o próprio rei em xeque
+                                // Usamos uma cópia do tabuleiro para a validação de xeque
+                                const tabuleiroTemp = JSON.parse(JSON.stringify(tabuleiro));
+                                tabuleiroTemp[destinoLinha][destinoColuna] = tabuleiroTemp[origemLinha][origemColuna];
+                                tabuleiroTemp[origemLinha][origemColuna] = '';
+
+                                if (validarMovimento(origemLinha, origemColuna, destinoLinha, destinoColuna, true) &&
+                                    !estaEmXeque(corIA, tabuleiroTemp)) {
+
+                                    const movimento = {
+                                        origem: {
+                                            linha: origemLinha,
+                                            coluna: origemColuna
+                                        },
+                                        destino: {
+                                            linha: destinoLinha,
+                                            coluna: destinoColuna
+                                        },
+                                        captura: corPecaDestino === 'branco' // É uma captura se a peça de destino for branca
+                                    };
+                                    movimentosPossiveis.push(movimento);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Prioriza movimentos: primeiro capturas, depois qualquer outro movimento
+            const capturas = movimentosPossiveis.filter(m => m.captura);
+            let movimentoEscolhido = null;
+
+            if (capturas.length > 0) {
+                // Escolhe uma captura aleatória
+                movimentoEscolhido = capturas[Math.floor(Math.random() * capturas.length)];
+            } else if (movimentosPossiveis.length > 0) {
+                // Se não houver capturas, escolhe um movimento aleatório
+                movimentoEscolhido = movimentosPossiveis[Math.floor(Math.random() * movimentosPossiveis.length)];
+            }
+
+            if (movimentoEscolhido) {
+                realizarMovimento(
+                    movimentoEscolhido.origem.linha,
+                    movimentoEscolhido.origem.coluna,
+                    movimentoEscolhido.destino.linha,
+                    movimentoEscolhido.destino.coluna
+                );
+                alternarJogador();
+            } else {
+                // Não há movimentos válidos para a IA, pode ser um impasse ou xeque-mate para o jogador
+                mensagensDiv.textContent = "IA não tem movimentos válidos. É um impasse ou xeque-mate para o jogador!";
+                gameOver = true; // Define como fim de jogo se a IA não pode se mover
+                atualizarStatus();
+            }
+        }
+
+        // Função para reiniciar o jogo
+        function reiniciarJogo() {
+            iniciarJogo();
+        }
+
+        // Inicia o jogo quando a página é carregada
+        document.addEventListener('DOMContentLoaded', iniciarJogo);
+    </script>
+</body>
+</html>
